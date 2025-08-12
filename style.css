@@ -1,0 +1,62 @@
+:root{
+  --bg:#05060a; --white:#fff; --muted:rgba(255,255,255,0.06);
+  --core-size:96px; --orbit-radius:260px; --rotation-sec:40s;
+  --zoom-scale:1.9; --panel-bg:rgba(0,0,0,0.6);
+}
+*{box-sizing:border-box;font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif}
+html,body{height:100%;width:100%;margin:0;padding:0;background:var(--bg);color:var(--white);overflow:hidden}
+#app-wrapper{position:fixed;inset:0;overflow:hidden}
+#camera{width:100%;height:100%;transform-origin:center center;transition:transform 800ms cubic-bezier(.22,.9,.3,1)}
+#app{position:relative;width:100%;height:100%}
+#starfield{position:absolute;inset:0;z-index:0;background:radial-gradient(ellipse at center,#06202b 0%, rgba(5,6,10,1) 60%)}
+#starfield::after{content:'';position:absolute;inset:0;background-image: radial-gradient(circle at 12% 20%, rgba(255,255,255,0.85) 0px, transparent 1px), radial-gradient(circle at 60% 60%, rgba(255,255,255,0.6) 0px, transparent 1px); background-size:3px 3px;opacity:0.6;animation:twinkle 6s linear infinite;z-index:0}
+@keyframes twinkle{0%{opacity:0.35}50%{opacity:0.95}100%{opacity:0.35}}
+
+#center-geo{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2;pointer-events:none;width:360px;height:360px;opacity:0.95}
+#center-geo img{width:100%;height:100%;object-fit:contain;filter:brightness(1.2) invert(1) grayscale(1);opacity:0.95}
+#center-lines{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;}
+
+/* orbit layer rotates slowly */
+#orbit-layer{position:absolute;left:0;top:0;width:100%;height:100%;z-index:1;transform-origin:center center;animation:rotate var(--rotation-sec) linear infinite}
+@keyframes rotate{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+
+#orbits,#branches{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
+#planets{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:auto;z-index:4}
+.planet{position:absolute;width:var(--core-size);height:var(--core-size);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .3s ease,opacity .3s;filter:drop-shadow(0 0 10px rgba(255,255,255,0.06))}
+.planet img{width:78%;height:78%;object-fit:contain;display:block}
+.planet .hover-rings{position:absolute;inset:-18px;border-radius:50%;pointer-events:none;opacity:0;transition:opacity .25s}
+.planet.hovered .hover-rings{opacity:1;animation:ringPulse 2s infinite}
+@keyframes ringPulse{0%{transform:scale(.96);opacity:.5}50%{transform:scale(1.08);opacity:1}100%{transform:scale(.96);opacity:.5}}
+
+/* zoom panel */
+#zoom-panel{position:fixed;inset:6% 6% 6% 6%;background:var(--panel-bg);backdrop-filter:blur(6px);z-index:8;padding:16px;border-radius:12px;display:flex;flex-direction:column;gap:8px;max-height:88vh;overflow:auto}
+#zoom-panel.hidden{display:none}
+#zoom-panel h2{margin:0}
+#tiers-container{display:flex;gap:12px;flex-wrap:nowrap;overflow-x:auto;padding-bottom:8px}
+.tier{min-width:320px;background:rgba(255,255,255,0.02);border-radius:8px;padding:12px;border:1px solid rgba(255,255,255,0.03)}
+.achievement{display:flex;gap:8px;align-items:flex-start;padding:8px;border-bottom:1px solid rgba(255,255,255,0.03)}
+.ach-title{font-size:14px;font-weight:600}
+.ach-desc{font-size:12px;opacity:0.85}
+
+/* junction icons */
+#junctions{position:absolute;left:0;top:0;pointer-events:none;z-index:5}
+.junction{position:absolute;width:44px;height:44px;transform:translate(-50%,-50%);pointer-events:none;filter:drop-shadow(0 0 12px rgba(255,255,255,0.08));transition:transform .4s ease,opacity .4s}
+.junction.locked{opacity:0.35;filter:grayscale(1) brightness(0.6)}
+.junction.unlocked{opacity:1;transform:scale(1.06)}
+
+/* projector & achievement nodes */
+.node-img{width:56px;height:56px;object-fit:contain;border-radius:8px}
+.node-wrap{position:relative;display:inline-block}
+.node-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.node-lock{width:56px;height:56px;object-fit:contain;opacity:0.9;}
+
+/* admin UI */
+.admin-floating{position:fixed;right:16px;bottom:16px;z-index:20;background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.06);padding:8px 10px;border-radius:10px;cursor:pointer}
+.modal{position:fixed;left:10%;top:10%;width:80%;height:80%;background:rgba(0,0,0,0.75);z-index:40;border-radius:8px;padding:14px;overflow:auto}
+.modal.hidden{display:none}
+#admin-json{width:100%;height:56%;background:#091018;color:var(--white);border:1px solid rgba(255,255,255,0.04);padding:8px;border-radius:6px;font-family:monospace;font-size:12px}
+
+/* pulse path */
+.pulse-path{stroke:rgba(255,255,255,0.06);stroke-width:1.6;fill:none;filter:drop-shadow(0 0 8px rgba(255,255,255,0.06))}
+.pulse-dot{fill:var(--white);opacity:0.95;filter:drop-shadow(0 0 8px rgba(255,255,255,0.9))}
+.tooltip{position:fixed;background:rgba(0,0,0,0.85);padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);font-size:13px;pointer-events:none;z-index:60}
