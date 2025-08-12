@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>ULTIMATE 100% REAL LIFE ACHIEVEMENT TRACKER - v2</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<audio id="bg-music" loop src="https://files.catbox.moe/ej4uff.mp3"></audio>
+
+<div id="app-wrapper">
+  <div id="camera">
+    <div id="app">
+      <div id="starfield"></div>
+      <div id="center-geo">
+        <img src="https://files.catbox.moe/8eyie5.png" alt="Center geometry" />
+      </div>
+
+      <svg id="orbits" xmlns="http://www.w3.org/2000/svg"></svg>
+      <svg id="branches" xmlns="http://www.w3.org/2000/svg"></svg>
+
+      <div id="planets"></div>
+
+      <div id="zoom-panel" class="hidden" aria-hidden="true">
+        <button id="zoom-close">Back</button>
+        <h2 id="cluster-title"></h2>
+        <div id="tiers-container"></div>
+      </div>
+
+      <!-- junction icons will be placed in #junctions -->
+      <div id="junctions"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Admin modal -->
+<div id="admin-modal" class="modal hidden" role="dialog" aria-modal="true">
+  <div class="modal-body">
+    <h3>Admin - Edit Achievements (client-only)</h3>
+    <div id="admin-login" class="admin-section">
+      <label>Enter admin password: <input id="admin-pass" type="password" /></label>
+      <button id="admin-unlock">Unlock</button>
+      <div class="note">Note: This is client-side only (for GitHub Pages). Changes will be saved to localStorage and can be downloaded as a JSON file.</div>
+    </div>
+    <div id="admin-editor" class="admin-section hidden">
+      <div id="admin-list"></div>
+      <div class="admin-actions">
+        <button id="admin-save">Save to localStorage</button>
+        <button id="admin-download">Download JSON</button>
+        <button id="admin-close">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<button id="open-admin" class="admin-floating">⚙️</button>
+
+<script src="app.js"></script>
+</body>
+</html>

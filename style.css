@@ -1,0 +1,51 @@
+:root{
+  --bg:#05060a; --white:#fff; --camera-transition:800ms; --ease-cubic:cubic-bezier(.22,.9,.3,1);
+  --core-size:96px;
+}
+*{box-sizing:border-box;font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif}
+html,body{height:100%;width:100%;margin:0;padding:0;background:var(--bg);color:var(--white);overflow:hidden}
+#app-wrapper{position:fixed;inset:0;overflow:hidden}
+#camera{width:100%;height:100%;transform-origin:center center;transition:transform var(--camera-transition) var(--ease-cubic)}
+#app{position:relative;width:100%;height:100%}
+#starfield{position:absolute;inset:0;z-index:0;background:radial-gradient(ellipse at center,#06202b 0%, rgba(5,6,10,1) 60%)}
+#starfield::after{content:'';position:absolute;inset:0;background-image:radial-gradient(circle at 20% 30%, rgba(255,255,255,0.9) 0px, transparent 1px),radial-gradient(circle at 70% 60%, rgba(255,255,255,0.85) 0px, transparent 1px);background-size:3px 3px;opacity:0.6;animation:twinkle 6s linear infinite;z-index:0}
+@keyframes twinkle{0%{opacity:0.35}50%{opacity:0.9}100%{opacity:0.35}}
+
+#center-geo{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2;pointer-events:none;width:320px;height:320px;opacity:0.95}
+#center-geo img{width:100%;height:100%;object-fit:contain;filter:brightness(1.2) invert(1) grayscale(1)}
+
+#orbits,#branches{position:absolute;left:0;top:0;width:100%;height:100%;z-index:1;pointer-events:none}
+#planets{position:absolute;left:0;top:0;width:100%;height:100%;z-index:3}
+
+.planet{position:absolute;width:var(--core-size);height:var(--core-size);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .3s ease;filter:drop-shadow(0 0 10px rgba(255,255,255,0.06));z-index:4}
+.planet img{width:78%;height:78%;object-fit:contain;display:block}
+
+.planet .hover-rings{position:absolute;inset:-12px;border-radius:50%;pointer-events:none;opacity:0;transition:opacity .25s}
+.planet.hovered .hover-rings{opacity:1;animation:ringPulse 2s infinite}
+@keyframes ringPulse{0%{transform:scale(.96);opacity:.6}50%{transform:scale(1.06);opacity:1}100%{transform:scale(.96);opacity:.6}}
+
+#zoom-panel{position:fixed;inset:6% 6% 6% 6%;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);z-index:7;padding:16px;border-radius:12px;display:flex;flex-direction:column;gap:8px;max-height:88vh;overflow:auto}
+#zoom-panel.hidden{display:none}
+#zoom-panel h2{margin:0 0 6px 0}
+#tiers-container{display:flex;gap:12px;flex-wrap:nowrap;overflow-x:auto;padding-bottom:8px}
+.tier{min-width:320px;background:rgba(255,255,255,0.02);border-radius:8px;padding:12px;border:1px solid rgba(255,255,255,0.04)}
+.achievement{display:flex;gap:8px;align-items:flex-start;padding:8px;border-bottom:1px solid rgba(255,255,255,0.03)}
+.achievement:last-child{border-bottom:none}
+.ach-title{font-size:14px;font-weight:600}
+.ach-desc{font-size:12px;opacity:0.8}
+
+#junctions{position:absolute;left:0;top:0;pointer-events:none;z-index:5}
+.junction{position:absolute;width:44px;height:44px;transform:translate(-50%,-50%);pointer-events:none;filter:drop-shadow(0 0 12px rgba(255,255,255,0.08))}
+.junction.locked{opacity:0.4;filter:grayscale(1) brightness(0.6)}
+.junction.unlocked{opacity:1;filter:none;}
+
+.admin-floating{position:fixed;right:16px;bottom:16px;z-index:20;background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.06);padding:8px 10px;border-radius:10px;cursor:pointer}
+
+.modal{position:fixed;inset:10% 20%;background:rgba(0,0,0,0.75);z-index:40;border-radius:8px;padding:14px}
+.modal.hidden{display:none}
+.admin-actions{display:flex;gap:8px;margin-top:8px}
+button{background:transparent;border:1px solid rgba(255,255,255,0.08);color:var(--white);padding:6px 10px;border-radius:6px;cursor:pointer}
+.tooltip{position:fixed;background:rgba(0,0,0,0.8);padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);font-size:13px;pointer-events:none;z-index:60}
+/* SVG pulse style */
+.pulse-path{stroke:rgba(255,255,255,0.06);stroke-width:1.5;fill:none}
+.pulse-dot{fill:var(--white);opacity:0.9;filter:drop-shadow(0 0 8px rgba(255,255,255,0.9))}
