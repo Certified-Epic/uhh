@@ -1,299 +1,472 @@
-// app.js - v2
-const ASSETS = {
-  coreImage: "https://files.catbox.moe/b0zug5.png",
-  projectorImage: "https://files.catbox.moe/i76wxr.png",
-  lockedOverlay: "https://files.catbox.moe/2tciqz.png",
-  hoverSound: "https://files.catbox.moe/kftxci.mp3",
-  bgMusic: "https://files.catbox.moe/ej4uff.mp3",
-  junctionIcon: "https://files.catbox.moe/z7t4yb.png"
-};
+let data;
+let selectedPlanetIndex = -1;
+const scale = 1.5; // Zoom scale
+const radius = 40; // Planet orbit radius in %
+const nodeRadiusBase = 10; // Node ring radius in %
+const hoverSfx = document.getElementById('hover-sfx');
+const bgMusic = document.getElementById('bg-music');
+let muted = false;
 
-let data = null;
-const config = { coreCount: 5, orbitRadius: 260, coreSize: 96 };
-
-async function loadData(){
-  // prefer localStorage if admin saved changes
-  const saved = localStorage.getItem('achievements_master');
-  if(saved){
-    try{ const parsed = JSON.parse(saved); data = parsed; init(); return; }catch(e){ console.warn("saved JSON parse error", e); }
-  }
-  try{
+// Load data and initialize
+async function init() {
+  let json = localStorage.getItem('achievements_master');
+  if (json) {
+    data = JSON.parse(json);
+  } else {
     const res = await fetch('achievements.json');
     data = await res.json();
-    init();
-  }catch(e){
-    console.error("Failed to load achievements.json", e);
-    data = { planets: [] };
-    init();
   }
+  updateStatuses();
+  renderStarryBg();
+  renderPlanets();
+  renderBranches();
+  renderJunctions();
+  document.addEventListener('click', () => bgMusic.play().catch(() => {}), { once: true });
+  document.getElementById('mute-toggle').addEventListener('click', toggleMute);
+  document.addEventListener('keydown', handleKeyboard);
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.key === 'a') promptAdmin();
+  });
 }
 
-function init(){
-  createOrbitsAndCores();
-  setupAudio();
-  setupAdmin();
-  window.addEventListener('resize', ()=>{ document.getElementById('orbits').innerHTML=''; document.getElementById('branches').innerHTML=''; document.getElementById('planets').innerHTML=''; document.getElementById('junctions').innerHTML=''; createOrbitsAndCores(); });
-}
-
-function setupAudio(){
-  const bg = document.getElementById('bg-music');
-  bg.src = ASSETS.bgMusic;
-  function playOnFirst(){ bg.play().catch(()=>{}); window.removeEventListener('click', playOnFirst); }
-  window.addEventListener('click', playOnFirst);
-}
-
-function createOrbitsAndCores(){
-  const svg = document.getElementById('orbits');
-  const branches = document.getElementById('branches');
-  const planetsLayer = document.getElementById('planets');
-  const junctionsLayer = document.getElementById('junctions');
-  const center = { x: window.innerWidth/2, y: window.innerHeight/2 };
-  const coreCount = Math.min(config.coreCount, data.planets.length);
-  const angleStep = (Math.PI*2)/coreCount;
-
-  for(let i=0;i<coreCount;i++){
-    const angle = i*angleStep - Math.PI/2;
-    const x = center.x + Math.cos(angle)*config.orbitRadius;
-    const y = center.y + Math.sin(angle)*config.orbitRadius;
-
-    // orbit circle
-    const orbit = document.createElementNS('http://www.w3.org/2000/svg','circle');
-    orbit.setAttribute('cx', center.x);
-    orbit.setAttribute('cy', center.y);
-    orbit.setAttribute('r', config.orbitRadius);
-    orbit.setAttribute('fill','none');
-    orbit.setAttribute('stroke','rgba(255,255,255,0.04)');
-    orbit.setAttribute('stroke-width','1');
-    svg.appendChild(orbit);
-
-    // branch path from center to core (quadratic)
-    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
-    const cx = center.x, cy = center.y;
-    const ctrlx = (cx + x)/2 + (Math.sin(angle)*60);
-    const ctrly = (cy + y)/2 + (Math.cos(angle)*-60);
-    const d = `M ${cx} ${cy} Q ${ctrlx} ${ctrly} ${x} ${y}`;
-    path.setAttribute('d', d);
-    path.setAttribute('class','pulse-path');
-    branches.appendChild(path);
-
-    // add pulsing dot along path using animateMotion
-    const dot = document.createElementNS('http://www.w3.org/2000/svg','circle');
-    dot.setAttribute('r','3.2');
-    dot.setAttribute('class','pulse-dot');
-    const m = document.createElementNS('http://www.w3.org/2000/svg','animateMotion');
-    m.setAttribute('dur','3s');
-    m.setAttribute('repeatCount','indefinite');
-    const mpath = document.createElementNS('http://www.w3.org/2000/svg','mpath');
-    mpath.setAttributeNS('http://www.w3.org/1999/xlink','href','#path-' + i);
-    // to reference, set id on path
-    path.setAttribute('id','path-' + i);
-    m.appendChild(mpath);
-    dot.appendChild(m);
-    branches.appendChild(dot);
-
-    // create core element
-    const p = document.createElement('div');
-    p.className = 'planet';
-    p.style.left = (x - config.coreSize/2) + 'px';
-    p.style.top = (y - config.coreSize/2) + 'px';
-    p.style.width = config.coreSize + 'px';
-    p.style.height = config.coreSize + 'px';
-    p.dataset.planetIndex = i;
-    const img = document.createElement('img');
-    img.src = ASSETS.coreImage;
-    img.alt = data.planets[i].planetName || 'Core';
-    p.appendChild(img);
-    const hr = document.createElement('div');
-    hr.className = 'hover-rings';
-    p.appendChild(hr);
-    planetsLayer.appendChild(p);
-
-    p.addEventListener('mouseenter', ()=>{ p.classList.add('hovered'); playHoverSound(); showTooltip(data.planets[i].planetName); });
-    p.addEventListener('mouseleave', ()=>{ p.classList.remove('hovered'); hideTooltip(); });
-    p.addEventListener('click', (e)=>{ e.stopPropagation(); zoomToCore(i); playClickSound(); });
-
-    // junction icon between this core and next (midpoint)
-    const nextIdx = (i+1)%coreCount;
-    const midx = (x + center.x)/2 + Math.cos(angle)*40;
-    const midy = (y + center.y)/2 + Math.sin(angle)*40;
-    const j = document.createElement('img');
-    j.className = 'junction';
-    j.style.left = midx + 'px';
-    j.style.top = midy + 'px';
-    j.src = ASSETS.junctionIcon;
-    j.alt = 'junction';
-    // check unlocked status: unlocked if entire planet i achieved (all achievements completed)
-    const planetObj = data.planets[i];
-    const allDone = isPlanetComplete(planetObj);
-    j.classList.add(allDone ? 'unlocked' : 'locked');
-    junctionsLayer.appendChild(j);
-  }
-}
-
-function isPlanetComplete(planetObj){
-  for(const tier of planetObj.tiers){
-    for(const a of tier.achievements){
-      if(a.status !== 'completed') return false;
-    }
-  }
-  return true;
-}
-
-// camera pan & zoom
-let currentZoom = null;
-function zoomToCore(index){
-  const planets = document.querySelectorAll('.planet');
-  const p = planets[index];
-  const rect = p.getBoundingClientRect();
-  const cx = window.innerWidth/2, cy = window.innerHeight/2;
-  const tx = (cx - (rect.left + rect.width/2));
-  const ty = (cy - (rect.top + rect.height/2));
-  const scale = 1.8;
-  const cam = document.getElementById('camera');
-  cam.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
-  currentZoom = index;
-  openZoomPanel(index);
-}
-
-document.getElementById('zoom-close').addEventListener('click', ()=>{ resetCamera(); });
-
-function resetCamera(){
-  const cam = document.getElementById('camera');
-  cam.style.transform = '';
-  currentZoom = null;
-  closeZoomPanel();
-}
-
-function openZoomPanel(index){
-  const panel = document.getElementById('zoom-panel');
-  panel.classList.remove('hidden');
-  const title = document.getElementById('cluster-title');
-  title.textContent = data.planets[index].planetName;
-  const container = document.getElementById('tiers-container');
-  container.innerHTML = '';
-  // show tiers horizontally with scroll, each tier shows list of achievements (scroll in panel)
-  for(const tier of data.planets[index].tiers){
-    const tierDiv = document.createElement('div');
-    tierDiv.className = 'tier';
-    const h = document.createElement('h3'); h.textContent = `Tier ${tier.tierNumber} - ${tier.tierName}`;
-    const p = document.createElement('p'); p.textContent = tier.description;
-    tierDiv.appendChild(h); tierDiv.appendChild(p);
-    for(const a of tier.achievements){
-      const achEl = document.createElement('div'); achEl.className = 'achievement';
-      const left = document.createElement('div'); left.style.width='10px';
-      const info = document.createElement('div');
-      const t = document.createElement('div'); t.className='ach-title'; t.textContent = a.title;
-      const d = document.createElement('div'); d.className='ach-desc'; d.textContent = a.description;
-      info.appendChild(t); info.appendChild(d);
-      const btn = document.createElement('button'); btn.textContent = (a.status==='completed') ? 'Completed' : (a.status==='locked' ? 'Locked' : 'Complete');
-      btn.disabled = (a.status==='locked' || a.status==='completed');
-      btn.addEventListener('click', ()=>{ markComplete(index, tier.tierNumber, a.id); btn.disabled=true; btn.textContent='Completed'; achEl.style.opacity=0.6; });
-      achEl.appendChild(left); achEl.appendChild(info); achEl.appendChild(btn);
-      tierDiv.appendChild(achEl);
-    }
-    container.appendChild(tierDiv);
-  }
-}
-
-function closeZoomPanel(){ document.getElementById('zoom-panel').classList.add('hidden'); }
-
-function markComplete(planetIndex, tierNumber, id){
-  const planet = data.planets[planetIndex];
-  for(const tier of planet.tiers){
-    for(const a of tier.achievements){
-      if(a.id === id){
-        a.status = 'completed';
-        a.dateCompleted = new Date().toISOString();
+// Update statuses based on completion
+function updateStatuses() {
+  data.planets.forEach(planet => {
+    planet.tiers.forEach((tier, tIndex) => {
+      if (tIndex === 0) return;
+      const prevTier = planet.tiers[tIndex - 1];
+      const allCompleted = prevTier.achievements.every(ach => ach.status === 'completed');
+      if (allCompleted) {
+        tier.achievements.forEach(ach => {
+          if (ach.status === 'locked') ach.status = 'available';
+        });
       }
-    }
-  }
-  // if entire tier completed, unlock next tier in same planet
-  const tier = planet.tiers.find(t=>t.tierNumber===tierNumber);
-  if(tier){
-    const all = tier.achievements.every(x=>x.status==='completed');
-    if(all){
-      const next = planet.tiers.find(t=>t.tierNumber===tierNumber+1);
-      if(next){ next.achievements.forEach(a=>{ if(a.status==='locked') a.status='available'; }) }
-    }
-  }
-  // persist
-  localStorage.setItem('achievements_master', JSON.stringify(data, null, 2));
-  // refresh junctions/unlocked visuals
-  document.getElementById('junctions').innerHTML='';
-  // redraw junctions simple way: clear and recreate or just call createOrbitsAndCores on resize
-  document.getElementById('orbits').innerHTML='';
-  document.getElementById('branches').innerHTML='';
-  document.getElementById('planets').innerHTML='';
-  document.getElementById('junctions').innerHTML='';
-  createOrbitsAndCores();
-  // refresh panel
-  if(currentZoom!==null) openZoomPanel(currentZoom);
-}
-
-function playHoverSound(){ const s = new Audio(ASSETS.hoverSound); s.volume=0.5; s.play().catch(()=>{}); }
-function playClickSound(){ const s = new Audio(ASSETS.hoverSound); s.volume=0.6; s.play().catch(()=>{}); }
-function showTooltip(text){ let tt = document.querySelector('.tooltip'); if(!tt){ tt = document.createElement('div'); tt.className='tooltip'; document.body.appendChild(tt);} tt.textContent = text; tt.style.display='block'; document.addEventListener('mousemove', moveTooltip); }
-function moveTooltip(e){ const tt = document.querySelector('.tooltip'); if(!tt) return; tt.style.left = (e.clientX+12)+'px'; tt.style.top = (e.clientY+12)+'px'; }
-function hideTooltip(){ const tt = document.querySelector('.tooltip'); if(tt) tt.style.display='none'; document.removeEventListener('mousemove', moveTooltip); }
-
-// ADMIN UI (client-side): unlock with simple password, edit achievements, save to localStorage and download
-function setupAdmin(){
-  const openBtn = document.getElementById('open-admin');
-  const modal = document.getElementById('admin-modal');
-  const login = document.getElementById('admin-login');
-  const editor = document.getElementById('admin-editor');
-  const unlockBtn = document.getElementById('admin-unlock');
-  const passInput = document.getElementById('admin-pass');
-  openBtn.addEventListener('click', ()=>{ modal.classList.remove('hidden'); });
-  document.getElementById('admin-close').addEventListener('click', ()=>{ modal.classList.add('hidden'); });
-
-  unlockBtn.addEventListener('click', ()=>{
-    if(passInput.value === 'letmein'){ // replace with your chosen client-side password
-      login.classList.add('hidden');
-      editor.classList.remove('hidden');
-      populateAdminList();
-    } else { alert('Wrong password (client-side)'); }
-  });
-
-  document.getElementById('admin-save').addEventListener('click', ()=>{
-    // read modified entries from DOM and save to localStorage
-    const edited = gatherAdminEdits();
-    if(edited){ localStorage.setItem('achievements_master', JSON.stringify(edited, null, 2)); alert('Saved to localStorage.'); data = edited; document.getElementById('orbits').innerHTML=''; document.getElementById('branches').innerHTML=''; document.getElementById('planets').innerHTML=''; document.getElementById('junctions').innerHTML=''; createOrbitsAndCores(); }
-  });
-  document.getElementById('admin-download').addEventListener('click', ()=>{
-    const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href=url; a.download='achievements_export.json'; a.click(); URL.revokeObjectURL(url);
-  });
-}
-
-function populateAdminList(){
-  const list = document.getElementById('admin-list');
-  list.innerHTML = '';
-  // create simple editors per planet -> tier -> achievements count
-  data.planets.forEach((p, pi)=>{
-    const pdiv = document.createElement('div'); pdiv.style.borderTop='1px solid rgba(255,255,255,0.04)'; pdiv.style.padding='8px 0';
-    const ph = document.createElement('h4'); ph.textContent = p.planetName; pdiv.appendChild(ph);
-    p.tiers.forEach((t, ti)=>{
-      const th = document.createElement('div'); th.textContent = `Tier ${t.tierNumber} - ${t.tierName}`; th.style.fontWeight='600'; pdiv.appendChild(th);
-      t.achievements.forEach((a, ai)=>{
-        const row = document.createElement('div'); row.style.display='flex'; row.style.gap='6px'; row.style.margin='6px 0';
-        const id = document.createElement('input'); id.value=a.id; id.style.width='220px';
-        const title = document.createElement('input'); title.value=a.title; title.style.flex='1';
-        const status = document.createElement('select'); ['locked','available','completed'].forEach(s=>{ const o = document.createElement('option'); o.value=s; o.text=s; if(a.status===s) o.selected=true; status.appendChild(o); });
-        row.appendChild(id); row.appendChild(title); row.appendChild(status);
-        pdiv.appendChild(row);
-      });
     });
-    list.appendChild(pdiv);
+  });
+  saveData();
+}
+
+// Save to localStorage
+function saveData() {
+  localStorage.setItem('achievements_master', JSON.stringify(data));
+}
+
+// Render starry background
+function renderStarryBg() {
+  const canvas = document.getElementById('starry-bg');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const ctx = canvas.getContext('2d');
+  for (let i = 0; i < 1000; i++) {
+    ctx.fillStyle = `rgba(255,255,255,${Math.random() * 0.5 + 0.5})`;
+    ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 1, 1);
+  }
+  window.addEventListener('resize', () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    renderStarryBg(); // Re-render on resize
   });
 }
 
-function gatherAdminEdits(){
-  // Instead of reconstructing DOM edits, simply return `data` (admin edits not applied in-place in this simple editor).
-  // For a full editor we'd sync each input; to keep this safe and quick we present the existing data and allow JSON download.
-  return data;
+// Render planets
+function renderPlanets() {
+  const numPlanets = data.planets.length;
+  const angleStep = 360 / numPlanets;
+  const planetsContainer = document.getElementById('planets');
+  planetsContainer.innerHTML = '';
+  data.planets.forEach((planet, index) => {
+    const div = document.createElement('div');
+    div.classList.add('planet');
+    div.tabIndex = 0;
+    div.ariaLabel = `Planet ${planet.planetName}`;
+    const angle = angleStep * index * Math.PI / 180;
+    div.style.left = `${50 + radius * Math.cos(angle)}%`;
+    div.style.top = `${50 + radius * Math.sin(angle)}%`;
+    div.innerHTML = `<img src="assets/core.png" alt="${planet.planetName}"><span>${planet.planetName}</span><svg class="rings"><circle cx="50%" cy="50%" r="60" fill="none" stroke="white" stroke-width="1" stroke-dasharray="5"></circle><circle cx="50%" cy="50%" r="80" fill="none" stroke="white" stroke-width="1" stroke-dasharray="5"></circle></svg>`;
+    div.addEventListener('click', () => zoomToPlanet(index));
+    div.addEventListener('mouseenter', playHover);
+    planetsContainer.appendChild(div);
+  });
 }
 
-// start
-loadData();
+// Render main branches with pulses
+function renderBranches() {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.style.width = '100%';
+  svg.style.height = '100%';
+  const numPlanets = data.planets.length;
+  const angleStep = 360 / numPlanets;
+  for (let i = 0; i < numPlanets; i++) {
+    const angle = angleStep * i * Math.PI / 180;
+    const endX = 50 + radius * Math.cos(angle);
+    const endY = 50 + radius * Math.sin(angle);
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', `M50 50 L${endX} ${endY}`);
+    path.setAttribute('stroke', 'white');
+    path.setAttribute('fill', 'none');
+    svg.appendChild(path);
+    // Add 3 particles per path
+    for (let j = 0; j < 3; j++) {
+      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle.setAttribute('r', Math.random() * 2 + 1);
+      circle.setAttribute('fill', 'white');
+      const anim = document.createElementNS('http://www.w3.org/2000/svg', 'animateMotion');
+      anim.setAttribute('dur', `${Math.random() * 5 + 3}s`);
+      anim.setAttribute('repeatCount', 'indefinite');
+      anim.setAttribute('begin', `${Math.random() * 5}s`);
+      anim.setAttribute('path', path.getAttribute('d'));
+      circle.appendChild(anim);
+      svg.appendChild(circle);
+    }
+  }
+  document.getElementById('branches').appendChild(svg);
+}
+
+// Render junctions
+function renderJunctions() {
+  const junctionsContainer = document.getElementById('junctions');
+  junctionsContainer.innerHTML = '';
+  const numPlanets = data.planets.length;
+  const angleStep = 360 / numPlanets;
+  for (let i = 0; i < numPlanets - 1; i++) {
+    const angle1 = angleStep * i * Math.PI / 180;
+    const angle2 = angleStep * (i + 1) * Math.PI / 180;
+    const midAngle = (angle1 + angle2) / 2;
+    const midX = 50 + (radius / 2) * Math.cos(midAngle);
+    const midY = 50 + (radius / 2) * Math.sin(midAngle);
+    const div = document.createElement('div');
+    div.classList.add('junction');
+    const planet = data.planets[i];
+    const allCompleted = planet.tiers.flatMap(t => t.achievements).every(a => a.status === 'completed');
+    if (!allCompleted) div.classList.add('locked');
+    div.innerHTML = `<img src="assets/junction.png" alt="Junction">`;
+    div.style.left = `${midX}%`;
+    div.style.top = `${midY}%`;
+    junctionsContainer.appendChild(div);
+  }
+}
+
+// Zoom to planet
+function zoomToPlanet(index) {
+  playHover(); // Use as click SFX
+  selectedPlanetIndex = index;
+  const angleStep = 360 / data.planets.length;
+  const angle = angleStep * index * Math.PI / 180;
+  const transX = - (radius * Math.cos(angle)) / scale * (scale - 1);
+  const transY = - (radius * Math.sin(angle)) / scale * (scale - 1);
+  document.getElementById('camera').style.transform = `translate(${transX}%, ${transY}%) scale(${scale})`;
+  renderZoomPanel(index);
+  renderPlanetNodes(index);
+  document.getElementById('zoom-panel').classList.remove('hidden');
+}
+
+// Render zoom panel
+function renderZoomPanel(index) {
+  const tiersContainer = document.querySelector('.tiers');
+  tiersContainer.innerHTML = '';
+  const planet = data.planets[index];
+  planet.tiers.forEach(tier => {
+    const tierDiv = document.createElement('div');
+    tierDiv.classList.add('tier');
+    tierDiv.innerHTML = `<h3>${tier.tierName}</h3><p>${tier.description}</p>`;
+    const achList = document.createElement('div');
+    achList.classList.add('achievements');
+    tier.achievements.forEach(ach => {
+      const achDiv = document.createElement('div');
+      achDiv.classList.add('achievement', ach.status);
+      achDiv.innerHTML = `<span>${ach.title}</span>`;
+      achDiv.tabIndex = 0;
+      achDiv.ariaLabel = ach.title;
+      achDiv.addEventListener('click', () => showDetail(ach));
+      achDiv.addEventListener('mouseenter', playHover);
+      achList.appendChild(achDiv);
+    });
+    tierDiv.appendChild(achList);
+    tiersContainer.appendChild(tierDiv);
+  });
+}
+
+// Render achievement nodes for zoomed planet
+function renderPlanetNodes(index) {
+  const nodesContainer = document.getElementById('nodes');
+  nodesContainer.innerHTML = '';
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.style.width = '100%';
+  svg.style.height = '100%';
+  const angleStep = 360 / data.planets.length;
+  const angle = angleStep * index * Math.PI / 180;
+  const planetX = 50 + radius * Math.cos(angle);
+  const planetY = 50 + radius * Math.sin(angle);
+  const planet = data.planets[index];
+  planet.tiers.forEach((tier, tIndex) => {
+    const tierRadius = nodeRadiusBase + tIndex * 5;
+    const achAngleStep = 360 / tier.achievements.length;
+    tier.achievements.forEach((ach, aIndex) => {
+      const achAngle = achAngleStep * aIndex * Math.PI / 180;
+      const nodeX = planetX + tierRadius * Math.cos(achAngle);
+      const nodeY = planetY + tierRadius * Math.sin(achAngle);
+      const div = document.createElement('div');
+      div.classList.add('node', ach.status);
+      div.tabIndex = 0;
+      div.ariaLabel = ach.title;
+      div.style.left = `${nodeX}%`;
+      div.style.top = `${nodeY}%`;
+      div.innerHTML = `<img src="assets/projector.png" alt="Achievement Node">` + (ach.status === 'locked' ? `<div class="overlay"><img src="assets/locked.png" alt="Locked"></div>` : '');
+      div.addEventListener('click', () => showDetail(ach));
+      div.addEventListener('mouseenter', (e) => showTooltip(e, ach.title));
+      nodesContainer.appendChild(div);
+      // Branch path
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', `M${planetX} ${planetY} L${nodeX} ${nodeY}`);
+      path.setAttribute('stroke', 'white');
+      path.setAttribute('fill', 'none');
+      svg.appendChild(path);
+      // Pulse (1 per path for performance)
+      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle.setAttribute('r', '1');
+      circle.setAttribute('fill', 'white');
+      const anim = document.createElementNS('http://www.w3.org/2000/svg', 'animateMotion');
+      anim.setAttribute('dur', '4s');
+      anim.setAttribute('repeatCount', 'indefinite');
+      anim.setAttribute('path', path.getAttribute('d'));
+      circle.appendChild(anim);
+      svg.appendChild(circle);
+    });
+  });
+  nodesContainer.appendChild(svg);
+}
+
+// Show detail overlay
+function showDetail(ach) {
+  if (ach.status !== 'available') return;
+  document.getElementById('detail-title').textContent = ach.title;
+  document.getElementById('detail-desc').textContent = ach.description;
+  document.getElementById('detail-overlay').classList.remove('hidden');
+  const completeBtn = document.getElementById('complete-btn');
+  completeBtn.onclick = () => completeAchievement(ach);
+  document.getElementById('close-btn').onclick = closeDetail;
+}
+
+// Complete achievement
+function completeAchievement(ach) {
+  ach.status = 'completed';
+  ach.dateCompleted = new Date().toISOString();
+  updateStatuses();
+  closeDetail();
+  if (selectedPlanetIndex !== -1) {
+    renderZoomPanel(selectedPlanetIndex);
+    renderPlanetNodes(selectedPlanetIndex);
+    renderJunctions();
+  }
+}
+
+// Close detail
+function closeDetail() {
+  document.getElementById('detail-overlay').classList.add('hidden');
+}
+
+// Zoom out
+function zoomOut() {
+  document.getElementById('camera').style.transform = 'scale(1) translate(0, 0)';
+  document.getElementById('zoom-panel').classList.add('hidden');
+  document.getElementById('nodes').innerHTML = '';
+  selectedPlanetIndex = -1;
+}
+
+// Show tooltip
+function showTooltip(e, text) {
+  playHover();
+  const tooltip = document.getElementById('tooltip');
+  tooltip.textContent = text;
+  tooltip.style.left = `${e.pageX + 10}px`;
+  tooltip.style.top = `${e.pageY + 10}px`;
+  tooltip.classList.remove('hidden');
+  setTimeout(() => tooltip.classList.add('hidden'), 2000);
+}
+
+// Play hover sound
+function playHover() {
+  if (!muted) {
+    hoverSfx.currentTime = 0;
+    hoverSfx.play().catch(() => {});
+  }
+}
+
+// Toggle mute
+function toggleMute() {
+  muted = !muted;
+  bgMusic.muted = muted;
+  hoverSfx.muted = muted;
+  document.getElementById('mute-toggle').textContent = muted ? 'Unmute' : 'Mute';
+}
+
+// Keyboard handling
+function handleKeyboard(e) {
+  if (e.key === 'Escape') {
+    if (!document.getElementById('detail-overlay').classList.contains('hidden')) closeDetail();
+    else if (selectedPlanetIndex !== -1) zoomOut();
+    else if (!document.getElementById('admin-panel').classList.contains('hidden')) closeAdmin();
+  }
+}
+
+// Admin prompt
+function promptAdmin() {
+  const pass = prompt('Enter admin password:');
+  if (pass === 'admin123') { // Change in code; insecure client-side
+    openAdmin();
+  } else {
+    alert('Incorrect password');
+  }
+}
+
+// Open admin
+function openAdmin() {
+  const panel = document.getElementById('admin-panel');
+  panel.classList.remove('hidden');
+  populateAdminSelects();
+  document.getElementById('admin-close').onclick = closeAdmin;
+  document.getElementById('admin-save-ach').onclick = saveAch;
+  document.getElementById('admin-add-ach').onclick = addAch;
+  document.getElementById('admin-remove-ach').onclick = removeAch;
+  document.getElementById('admin-bulk-unlock-tier').onclick = bulkUnlockTier;
+  document.getElementById('admin-bulk-reset-planet').onclick = bulkResetPlanet;
+  document.getElementById('admin-download').onclick = downloadJson;
+}
+
+// Populate admin selects
+function populateAdminSelects() {
+  const planetSelect = document.getElementById('admin-planet');
+  planetSelect.innerHTML = '';
+  data.planets.forEach((p, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.text = p.planetName;
+    planetSelect.appendChild(opt);
+  });
+  planetSelect.onchange = populateTierSelect;
+  populateTierSelect();
+}
+
+// Populate tier select
+function populateTierSelect() {
+  const planetIndex = document.getElementById('admin-planet').value;
+  const tierSelect = document.getElementById('admin-tier');
+  tierSelect.innerHTML = '';
+  data.planets[planetIndex].tiers.forEach((t, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.text = t.tierName;
+    tierSelect.appendChild(opt);
+  });
+  tierSelect.onchange = populateAchSelect;
+  populateAchSelect();
+}
+
+// Populate ach select
+function populateAchSelect() {
+  const planetIndex = document.getElementById('admin-planet').value;
+  const tierIndex = document.getElementById('admin-tier').value;
+  const achSelect = document.getElementById('admin-ach');
+  achSelect.innerHTML = '';
+  data.planets[planetIndex].tiers[tierIndex].achievements.forEach((a, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.text = a.title;
+    achSelect.appendChild(opt);
+  });
+  achSelect.onchange = loadAchData;
+  loadAchData();
+}
+
+// Load ach data into inputs
+function loadAchData() {
+  const planetIndex = document.getElementById('admin-planet').value;
+  const tierIndex = document.getElementById('admin-tier').value;
+  const achIndex = document.getElementById('admin-ach').value;
+  const ach = data.planets[planetIndex].tiers[tierIndex].achievements[achIndex];
+  document.getElementById('admin-title').value = ach.title;
+  document.getElementById('admin-desc').value = ach.description;
+  document.getElementById('admin-status').value = ach.status;
+}
+
+// Save ach
+function saveAch() {
+  const planetIndex = document.getElementById('admin-planet').value;
+  const tierIndex = document.getElementById('admin-tier').value;
+  const achIndex = document.getElementById('admin-ach').value;
+  const ach = data.planets[planetIndex].tiers[tierIndex].achievements[achIndex];
+  ach.title = document.getElementById('admin-title').value;
+  ach.description = document.getElementById('admin-desc').value;
+  ach.status = document.getElementById('admin-status').value;
+  if (ach.status === 'completed') ach.dateCompleted = new Date().toISOString();
+  updateStatuses();
+  populateAdminSelects(); // Refresh
+  if (selectedPlanetIndex !== -1) renderZoomPanel(selectedPlanetIndex);
+}
+
+// Add new ach
+function addAch() {
+  const planetIndex = document.getElementById('admin-planet').value;
+  const tierIndex = document.getElementById('admin-tier').value;
+  const newAch = {
+    id: `new_${Date.now()}`,
+    title: 'New Achievement',
+    description: 'Description',
+    planet: data.planets[planetIndex].planetName,
+    tier: data.planets[planetIndex].tiers[tierIndex].tierNumber,
+    status: 'locked',
+    dateCompleted: null
+  };
+  data.planets[planetIndex].tiers[tierIndex].achievements.push(newAch);
+  saveData();
+  populateAdminSelects();
+}
+
+// Remove ach
+function removeAch() {
+  const planetIndex = document.getElementById('admin-planet').value;
+  const tierIndex = document.getElementById('admin-tier').value;
+  const achIndex = document.getElementById('admin-ach').value;
+  data.planets[planetIndex].tiers[tierIndex].achievements.splice(achIndex, 1);
+  saveData();
+  populateAdminSelects();
+}
+
+// Bulk unlock tier
+function bulkUnlockTier() {
+  const planetIndex = document.getElementById('admin-planet').value;
+  const tierIndex = document.getElementById('admin-tier').value;
+  data.planets[planetIndex].tiers[tierIndex].achievements.forEach(ach => ach.status = 'available');
+  saveData();
+  populateAdminSelects();
+}
+
+// Bulk reset planet
+function bulkResetPlanet() {
+  const planetIndex = document.getElementById('admin-planet').value;
+  data.planets[planetIndex].tiers.forEach(tier => {
+    tier.achievements.forEach(ach => {
+      ach.status = tier.tierNumber === 1 ? 'available' : 'locked';
+      ach.dateCompleted = null;
+    });
+  });
+  saveData();
+  populateAdminSelects();
+}
+
+// Download JSON
+function downloadJson() {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'achievements.json';
+  a.click();
+}
+
+// Close admin
+function closeAdmin() {
+  document.getElementById('admin-panel').classList.add('hidden');
+}
+
+init();
