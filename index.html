@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>Star Chart — Mobile Friendly</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<audio id="bg-music" loop></audio>
+<div id="hud">
+  <div id="top-left">STAR CHART</div>
+  <div id="top-right">Menu • Profile</div>
+</div>
+<div id="viewport">
+  <div id="camera">
+    <div id="scene">
+      <div id="center-geo"><img id="center-img" src="" alt="center" /></div>
+      <svg id="svg-layer" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div id="planets"></div>
+      <div id="junctions"></div>
+    </div>
+  </div>
+</div>
+
+<div id="panel" class="hidden">
+  <button id="panel-close">✕</button>
+  <h3 id="panel-title"></h3>
+  <div id="panel-body"></div>
+</div>
+
+<button id="open-admin" class="admin-floating">⚙️</button>
+<div id="admin-modal" class="modal hidden">
+  <div class="modal-body">
+    <h3>Admin (client)</h3>
+    <textarea id="admin-json"></textarea>
+    <div class="admin-actions">
+      <button id="admin-save">Save</button>
+      <button id="admin-download">Download JSON</button>
+      <button id="admin-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
